@@ -1,11 +1,10 @@
-import asyncio
 import math
 from datetime import datetime
 from typing import Union
 
 import cyrtranslit
-from transliterate import translit
 from pytz import timezone
+from transliterate import translit
 
 
 KEYS = [
@@ -114,5 +113,22 @@ async def cities_comparing_check(city: list, result: dict) -> Union[bool, dict]:
     return result
 
 
-if __name__ == '__main__':
-    asyncio.run()
+async def cities_help_hints(city_part: str) -> Union[bool, dict]:
+    cities: list = await cities_read_file()
+    latin_first: str = cyrtranslit.to_latin(city_part.lower(), 'ru')
+    latin_second: str = translit(city_part.lower(), language_code='ru', reversed=True)
+
+    result: dict = {'available_names': []}
+    for city in cities:
+        check_city: list = city.split('\t')
+        find_first: str = check_city[1].lower().find(latin_first)
+        find_second: str = check_city[1].lower().find(latin_second)
+
+        if (find_first or find_second) != -1:
+            result['available_names'].append(check_city[1])
+
+    if not result['available_names']:
+        return False
+
+    result['available_names']: list = list(set(result['available_names']))
+    return result

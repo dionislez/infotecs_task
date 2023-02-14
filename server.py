@@ -1,20 +1,24 @@
 from fastapi import FastAPI, Path, Query
-from pydantic import BaseModel
 
 import queries
-
-
-class Item(BaseModel):
-    first_city: str = None
-    second_city: str = None
-    page: int = None
-    count: int = None
 
 
 app = FastAPI()
 
 
-@app.get('/city/{geonameid}')
+@app.get('/')
+async def main():
+    return {
+        'swagger': 'http://127.0.0.1:8000/docs',
+        'get_city_by_geonameid': 'http://127.0.0.1:8000/cities/{geonameid}',
+        'get_cities_by_page_and_count': 'http://127.0.0.1:8000/cities?page={page}&count={count}',
+        'compare_two_cities': 'http://127.0.0.1:8000/cities/compare/{first_city}&{second_city}',
+        'find_available_cities': 'http://127.0.0.1:8000/cities/find/{hint}',
+        'made_by': 'Leznevskiy Denis'
+    }
+
+
+@app.get('/cities/{geonameid}')
 async def get_city_by_geonameid(
     geonameid: str = Path(min_length=6, max_length=8)
 ) -> dict:
@@ -49,11 +53,22 @@ async def get_cities_by_page_and_count(
 async def compare_two_cities(
     first_city: str = Path(max_length=20),
     second_city: str = Path(max_length=20)
-):
-    compared = await queries.cities_comparing(
+) -> dict:
+    compared: bool | dict = await queries.cities_comparing(
         first_city.lower(), second_city.lower()
     )
     if not compared:
         return {'Error': 'there is no such city/cities'}
     
     return compared
+
+
+@app.get('/cities/find/{hint}')
+async def find_available_cities(
+    hint: str = Path(min_length=1, max_length=20)
+) -> dict:
+    find_hints = await queries.cities_help_hints(hint)
+    if not find_hints:
+        return {'Error': 'there are no cities with such hint'}
+    
+    return find_hints
