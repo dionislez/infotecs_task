@@ -73,7 +73,6 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
     for city in cities:
         check_city: list = city.split('\t')
         name: str = check_city[1].lower().replace('ë', 'e')
-        population: int = int(check_city[14])
         found = [False, False]
 
         if name in available_translits:
@@ -88,6 +87,7 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
         if found[0]:
             if found[1] in result:
                 added_population: int = int(result[found[1]]['population'])
+                population: int = int(check_city[14])
                 if added_population < population:
                     result[found[1]] = dict(zip(KEYS, check_city))
                 continue
@@ -174,7 +174,7 @@ async def cities_check_city(first_city: str, second_city: str, alternatenames: l
     for altername in alternatenames:
         if first_city == altername:
             return [True, 1]
-        if second_city == altername:
+        elif second_city == altername:
             return [True, 2]
 
     return [False, False]
