@@ -6,7 +6,7 @@ from dateutil.relativedelta import relativedelta
 from pytz import timezone
 
 
-KEYS = [
+KEYS: list = [
     'geonameid', 'name', 'asciiname', 'alternatenames',
     'latitude', 'longitude', 'feature class', 'feature code',
     'country code', 'cc2', 'admin1 code', 'admin2 code',
