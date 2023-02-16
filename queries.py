@@ -1,4 +1,6 @@
+import difflib
 import math
+import re
 from datetime import datetime
 from typing import Union
 
@@ -26,7 +28,7 @@ async def cities_find_by_geonameid(geonameid: str) -> Union[bool, dict]:
     '''Method for http://127.0.0.1:8000/cities/{geonameid}'''
     cities: list = await cities_read_file()
 
-    city_found: list = list()
+    city_found: list = []
     for city in cities:
         check_id: list = city.split('\t')
         if geonameid == check_id[0]:
@@ -47,7 +49,7 @@ async def cities_by_page_count(page: int, count: int) -> tuple:
     page_from: int = 0 if page == 1 else (page - 1) * count
     page_to: int = page_from + count
 
-    result: list = list()
+    result: list = []
     for city in cities[page_from:page_to]:
         city_dict: dict = dict(zip(KEYS, city.split('\t')))
         result.append(city_dict)
@@ -69,7 +71,8 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
     except KeyError:
         available_translits.update({second_city: 2})
 
-    result: dict = dict()
+    result: dict = {}
+    control_check: dict = {1: {}, 2: {}}
     for city in cities:
         check_city: list = city.split('\t')
         name: str = check_city[1].lower().replace('ë', 'e')
@@ -84,6 +87,14 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
             alternatenames: list = alternatenames.replace('ё', 'е').split(',')
             found = await cities_check_city(first_city, second_city, alternatenames)
 
+        if not found[0] and (1 or 2) not in result:
+            for translit in available_translits:
+                matcher = difflib.SequenceMatcher(None, name, translit)
+                ratio = matcher.ratio()
+                if ratio >= 0.8:
+                    control_check[available_translits[translit]][ratio] = dict(zip(KEYS,check_city))
+                    break
+
         if found[0]:
             if found[1] in result:
                 added_population: int = int(result[found[1]]['population'])
@@ -93,6 +104,11 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
                 continue
 
             result[found[1]] = dict(zip(KEYS, check_city))
+
+    for number in [1, 2]:
+        if number not in result and control_check[number]:
+            max_ratio = max(control_check[number])
+            result[number] = control_check[number][max_ratio]
 
     check_result: bool | dict = await cities_comparing_check(list(result.keys()), result)
     return check_result
@@ -149,18 +165,18 @@ async def cities_help_hints(city_part: str) -> Union[bool, dict]:
     cities: list = await cities_read_file()
     try:
         latin_find: str = await cities_translit(city_part, None)
-        latin_find: str = list(latin_find.keys())[0]
+        latin_find: str = list(latin_find.keys())
     except KeyError:
-        latin_find: str = city_part
+        latin_find: str = [city_part]
 
     result: dict = {'available_names': []}
     for city in cities:
         check_city: list = city.split('\t')
         check_latin: str = check_city[1].lower().replace('ë', 'e').replace('ё', 'е')
-        check_latin: str = check_latin.find(latin_find)
-
-        if check_latin != -1:
-            result['available_names'].append(check_city[1])
+        for check in latin_find:
+            if check_latin.find(check) != -1:
+                result['available_names'].append(check_city[1])
+                break
 
     if not result['available_names']:
         return False
@@ -174,7 +190,7 @@ async def cities_check_city(first_city: str, second_city: str, alternatenames: l
     for altername in alternatenames:
         if first_city == altername:
             return [True, 1]
-        elif second_city == altername:
+        if second_city == altername:
             return [True, 2]
 
     return [False, False]
@@ -182,32 +198,36 @@ async def cities_check_city(first_city: str, second_city: str, alternatenames: l
 
 async def cities_translit(word: str, city_num: int) -> dict:
     '''Own method to translit areas and cities'''
-    alphabet: dict = {'а': ('a', 'a'), 'б': ('b', 'b'), 'в': ('v', 'v'), 'г': ('g', 'g'),
-                'д': ('d', 'd'), 'е': ('e', 'e'), 'ё': ('yo', 'e'), 'ж': ('zh', 'zh'),
-                'з': ('z', 'z'), 'и': ('i', 'i'), 'й': ("i'", 'y'), 'к': ('k', 'k'),
-                'л': ('l', 'l'), 'м': ('m', 'm'), 'н': ('n', 'n'), 'о': ('o', 'o'),
-                'п': ('p', 'p'), 'р': ('r', 'r'), 'с': ('s', 's'), 'т': ('t', 't'),
-                'у': ('u', 'u'), 'ф': ('f', 'f'), 'х': ('kh', 'kh'), 'ц': ('tc', 'ts'),
-                'ч': ('ch', 'ch'), 'ш': ('sh', 'sh'), 'щ': ('shch', 'shch'), 'ъ': ("”", ''),
-                'ы': ('y', 'y'), 'ь': ("'", "’"), 'э': ("e'", 'e'), 'ю': ('iu', 'yu'),
-                'я': ('ia', 'ya'), ' ': (' ', ' '), '-':('-', '-'), '#': ('#', '#'),
-                '№': ('#', '#'), '«': ('«', '«'), '»': ('»', '»'), "'": ("'", "'"),
-                '"': ('"', '"'), ')': (')', ')'), '(': ('(', '('), '?': ('?', '?')}
+    alphabet: dict = {'а': ('a','a','a'),'б': ('b','b','b'),'в': ('v','v','v'),'г': ('g','g','g'),
+                'д': ('d','d','d'),'е': ('e','e','e'),'ё': ('yo','e','e'),'ж': ('zh','zh','zh'),
+                'з': ('z','z','z'),'и': ('i','i','i'),'й': ("i'",'y','i'),'к': ('k','k','k'),
+                'л': ('l','l','l'),'м': ('m','m','m'),'н': ('n','n','n'),'о': ('o','o','o'),
+                'п': ('p','p','p'),'р': ('r','r','r'),'с': ('s','s','s'),'т': ('t','t','t'),
+                'у': ('u','u','u'),'ф': ('f','f','f'),'х': ('kh','kh','kh'),'ц': ('tc','ts','ts'),
+                'ч': ('ch','ch','ch'),'ш': ('sh','sh','sh'),'щ': ('shch','shch','shch'),
+                'ъ': ("”",'',''),'ы': ('y','y','y'),'ь': ("'","’","’"),'э': ("e'",'e','e'),
+                'ю': ('iu','yu','yu'),'я': ('ia','ya','ya'),' ': (' ',' ',' '),'-':('-','-','-'),
+                '#': ('#','#','#'),'№': ('#','#','#'),'«': ('«','«','«'),'»': ('»','»','»'),
+                "'": ("'","'","'"),'"': ('"','"','"'),')': (')',')',')'),'(': ('(','(','('),
+                '?': ('?','?','?')}
 
     length: int = len(word)
     glasns: list = ['а', 'е', 'ё', 'и', 'о', 'у', 'э']
 
     punto_word: str = str()
     recommended_word: str = str()
+    extra_word: str = str()
     for index, letter in enumerate(word):
         if letter in '0123456789':
             punto_word += letter
             recommended_word += letter
+            extra_word += letter
             continue
 
         if index == 0 and letter == 'е':
             punto_word += 'ye'
             recommended_word += 'ye'
+            extra_word += 'ye'
             continue
 
         if index != 0 and index != length-1 and letter in ['ь', 'ъ'] and word[index+1] in glasns:
@@ -216,17 +236,33 @@ async def cities_translit(word: str, city_num: int) -> dict:
                 change: str = '”y'
             punto_word += change
             recommended_word += change
+            extra_word += change
             continue
 
         if index != 0 and index != length-1 and letter in glasns and word[index+1] in glasns:
             punto_word += alphabet[letter][0] + 'y'
             recommended_word += alphabet[letter][1] + 'y'
+            extra_word += alphabet[letter][2] + 'y'
             continue
 
         punto_word += alphabet[letter][0]
         recommended_word += alphabet[letter][1]
+        extra_word += alphabet[letter][2]
 
-    if punto_word == recommended_word:
-        return {recommended_word: city_num}
+    result = {recommended_word: city_num, punto_word: city_num, extra_word: city_num}
+    find_words = re.compile("evrop|yevrop|aziya|aziia|sankhotel|otel’|otel'")
+    for gen_word in [punto_word, recommended_word, extra_word]:
+        if find_words.search(gen_word):
+            updated = gen_word.replace('yev', 'eu').replace('ev', 'eu')
+            updated = updated.replace('sankhotel', 'sunhotel')
+            updated = updated.replace('aziya', 'asia').replace('aziia', 'asia')
+            updated = updated.replace("otel'", 'hotel').replace('otel’', 'hotel')
+            result.update({updated: city_num})
 
-    return {recommended_word: city_num, punto_word: city_num}
+        if '’' in gen_word:
+            result.update({gen_word.replace("'", '').replace("’", ''): city_num})
+
+        if "'" in gen_word:
+            result.update({gen_word.replace("'", '').replace("’", ''): city_num})
+
+    return result
