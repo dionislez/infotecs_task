@@ -102,7 +102,6 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
                 if added_population < population:
                     result[found[1]] = dict(zip(KEYS, check_city))
                 continue
-
             result[found[1]] = dict(zip(KEYS, check_city))
 
     for number in [1, 2]:

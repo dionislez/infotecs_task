@@ -4,12 +4,8 @@ from fastapi.responses import JSONResponse
 import queries
 
 
-app: FastAPI = FastAPI(
-    docs_url='/infotecs/docs',
-    redoc_url='/infotecs/redoc',
-    version='TASK',
-    title='Infotecs task. Leznevskiy Denis.'
-)
+app: FastAPI = FastAPI(title='Infotecs task. Leznevskiy Denis.', version='TASK',
+                        docs_url='/infotecs/docs', redoc_url='/infotecs/redoc')
 
 
 @app.get('/cities/{geonameid}', tags=['1) Cities by a geonameid'])
@@ -19,10 +15,7 @@ async def get_city_by_geonameid(
     '''/cities/{geonameid}'''
     found_city: dict | bool = await queries.cities_find_by_geonameid(str(geonameid))
     if not found_city:
-        return JSONResponse(
-            content={'message': 'Wrong geonameid'},
-            status_code=404
-        )
+        return JSONResponse(content={'message': 'Wrong geonameid'}, status_code=404)
     return found_city
 
 
@@ -30,14 +23,12 @@ async def get_city_by_geonameid(
 async def get_cities_by_page_and_count(
     page: int = Query(gt=0, description='example: 1'),
     count: int = Query(gt=0, lt=501, description='example: 5')
-) -> queries.Union[dict, list]:
+) -> list:
     '''/cities?page={page}&count={count}'''
     found_cities: tuple = await queries.cities_by_page_count(page, count)
     if not found_cities[0]:
-        return JSONResponse(
-            content={'message': f'{found_cities[1]} pages for {count} cities'},
-            status_code=404
-        )
+        return JSONResponse(content={'message': f'{found_cities[1]} pages for {count} cities'},
+                            status_code=404)
     return found_cities[0]
 
 
@@ -54,17 +45,11 @@ async def compare_two_cities(
         second_city.lower().replace('ë', 'e').replace('ё', 'е')
     )
     if not compared:
-        return JSONResponse(
-            content={'message': 'No cities'},
-            status_code=404
-        )
+        return JSONResponse(content={'message': 'No cities'}, status_code=404)
     return compared
 
 
-@app.get(
-    '/cities/find/{hint}',
-    tags=['4) Find cities by a hint']
-)
+@app.get('/cities/find/{hint}', tags=['4) Find cities by a hint'])
 async def find_available_cities(
     hint: str = Path(max_length=20, description='example: Томск')
 ) -> dict:
@@ -73,8 +58,5 @@ async def find_available_cities(
         hint.lower().replace('ë', 'e').replace('ё', 'е')
     )
     if not find_hints:
-        return JSONResponse(
-            content={'message': 'No cities'},
-            status_code=404
-        )
+        return JSONResponse(content={'message': 'No cities'}, status_code=404)
     return find_hints
