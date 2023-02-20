@@ -110,16 +110,26 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
 
     result: dict = {}
     if result_check[1]:
-        check_name = sorted(result_check[1], key=lambda x:int(x['population']), reverse=True)
-        cur_city = [name for name in check_name if name['name'].lower() in available_translits]
+        check_name: list = sorted(
+            result_check[1], key=lambda x:int(x['population']), reverse=True
+        )
+        cur_city: list = [
+            name for name in check_name
+            if name['name'].lower().replace('ë', 'e') in available_translits
+        ]
         result[1]: dict = cur_city[0] if cur_city else check_name[0]
     elif control_check[1]:
         max_key: float = max(list(control_check[1].keys()))
         result[1]: dict  = control_check[1][max_key]
 
     if result_check[2]:
-        check_name = sorted(result_check[2], key=lambda x:int(x['population']), reverse=True)
-        cur_city = [name for name in check_name if name['name'].lower() in available_translits]
+        check_name: list = sorted(
+            result_check[2], key=lambda x:int(x['population']), reverse=True
+        )
+        cur_city: list = [
+            name for name in check_name
+            if name['name'].lower().replace('ë', 'e') in available_translits
+        ]
         result[2]: dict = cur_city[0] if cur_city else check_name[0]
     elif control_check[2]:
         max_key: float = max(list(control_check[2].keys()))

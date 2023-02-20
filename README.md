@@ -52,7 +52,7 @@ uvicorn server:app --reload --host 127.0.0.1 --port 8000
 
 ## [📄](#содержание) _Стек разработки_
 - _**Язык программирования:** Python 3.11_
-- _**IDE:** Visual Studio_
+- _**IDE:** Visual Studio Code_
 - _**Библиотеки/фреймворки:** fastapi, asyncio, python-dateutil, pytz_
 ---
 
