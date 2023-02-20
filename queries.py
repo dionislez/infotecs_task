@@ -1,6 +1,9 @@
+import asyncio
 import difflib
 import math
+import multiprocessing
 import re
+from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from typing import Union
 
@@ -25,7 +28,7 @@ async def cities_read_file() -> list:
 
 
 async def cities_find_by_geonameid(geonameid: str) -> Union[bool, dict]:
-    '''Method for http://127.0.0.1:8000/cities/{geonameid}'''
+    '''Method for /cities/{geonameid}'''
     cities: list = await cities_read_file()
 
     city_found: list = []
@@ -42,7 +45,7 @@ async def cities_find_by_geonameid(geonameid: str) -> Union[bool, dict]:
 
 
 async def cities_by_page_count(page: int, count: int) -> tuple:
-    '''Method for http://127.0.0.1:8000/cities?page={page}&count={count}'''
+    '''Method for /cities?page={page}&count={count}'''
     cities: list = await cities_read_file()
 
     available_pages: int = math.ceil(len(cities) / count)
@@ -58,7 +61,7 @@ async def cities_by_page_count(page: int, count: int) -> tuple:
 
 
 async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dict]:
-    '''Method for http://127.0.0.1:8000/cities/compare/{first_city}&{second_city}'''
+    '''Method for /cities/compare/{first_city}&{second_city}'''
     cities: list = await cities_read_file()
     try:
         translits_first: dict = await cities_translit(first_city, 1)
@@ -71,9 +74,69 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
     except KeyError:
         available_translits.update({second_city: 2})
 
+    loop = asyncio.get_event_loop()
+    cores: int = multiprocessing.cpu_count()
+    executor: ProcessPoolExecutor = ProcessPoolExecutor(max_workers=cores)
+
+    total_cities: int = len(cities)
+    tasks: list = []
+    for core in range(1, cores+1):
+        finish: int = (total_cities // cores) * core
+        if core == cores:
+            finish: int = total_cities
+        start: int = (total_cities // cores) * (core - 1)
+        tasks.append(loop.run_in_executor(executor,
+                                            cities_comparing_finding, cities,
+                                            start, finish, available_translits,
+                                            first_city, second_city))
+    tasks: list = await asyncio.gather(*tasks)
+
+    result_check: dict = {1: [], 2: []}
+    control_check: dict = {1: {}, 2: {}}
+    for steps_1_2, step_3 in tasks:
+        if steps_1_2:
+            if 1 in steps_1_2:
+                result_check[1].append(steps_1_2[1])
+            if 2 in steps_1_2:
+                result_check[2].append(steps_1_2[2])
+            continue
+
+        if step_3[1]:
+            key: float = max(step_3[1])
+            control_check[1][key] = step_3[1][key]
+        if step_3[2]:
+            key: float = max(step_3[2])
+            control_check[2][key] = step_3[2][key]
+
+    result: dict = {}
+    if result_check[1]:
+        check_name = sorted(result_check[1], key=lambda x:int(x['population']), reverse=True)
+        cur_city = [name for name in check_name if name['name'].lower() in available_translits]
+        result[1]: dict = cur_city[0] if cur_city else check_name[0]
+    elif control_check[1]:
+        max_key: float = max(list(control_check[1].keys()))
+        result[1]: dict  = control_check[1][max_key]
+
+    if result_check[2]:
+        check_name = sorted(result_check[2], key=lambda x:int(x['population']), reverse=True)
+        cur_city = [name for name in check_name if name['name'].lower() in available_translits]
+        result[2]: dict = cur_city[0] if cur_city else check_name[0]
+    elif control_check[2]:
+        max_key: float = max(list(control_check[2].keys()))
+        result[2]: dict = control_check[2][max_key]
+
+    check_result: bool | dict = await cities_comparing_check(list(result.keys()), result)
+    return check_result
+
+
+def cities_comparing_finding(
+    cities: list, start: int, finish: int,
+    available_translits: dict, first_city: str, second_city: str
+) -> tuple:
+    '''Search of 2 cities in 3 steps (by translit, russian name, sequences)'''
     result: dict = {}
     control_check: dict = {1: {}, 2: {}}
-    for city in cities:
+    for city in cities[start:finish]:
         check_city: list = city.split('\t')
         name: str = check_city[1].lower().replace('ë', 'e')
         found = [False, False]
@@ -85,7 +148,7 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
         if not found[0]:
             alternatenames: list = check_city[3].lower().replace('ë', 'e')
             alternatenames: list = alternatenames.replace('ё', 'е').split(',')
-            found = await cities_check_city(first_city, second_city, alternatenames)
+            found = cities_check_city(first_city, second_city, alternatenames)
 
         if not found[0] and (1 or 2) not in result:
             for translit in available_translits:
@@ -104,13 +167,7 @@ async def cities_comparing(first_city: str, second_city: str) -> Union[bool, dic
                 continue
             result[found[1]] = dict(zip(KEYS, check_city))
 
-    for number in [1, 2]:
-        if number not in result and control_check[number]:
-            max_ratio = max(control_check[number])
-            result[number] = control_check[number][max_ratio]
-
-    check_result: bool | dict = await cities_comparing_check(list(result.keys()), result)
-    return check_result
+    return result, control_check
 
 
 async def cities_comparing_check(city: list, result: dict) -> Union[bool, dict]:
@@ -160,7 +217,7 @@ async def cities_comparing_check(city: list, result: dict) -> Union[bool, dict]:
 
 
 async def cities_help_hints(city_part: str) -> Union[bool, dict]:
-    '''Method for http://127.0.0.1:8000/cities/find/{hint}'''
+    '''Method for /cities/find/{hint}'''
     cities: list = await cities_read_file()
     try:
         latin_find: str = await cities_translit(city_part, None)
@@ -184,7 +241,7 @@ async def cities_help_hints(city_part: str) -> Union[bool, dict]:
     return result
 
 
-async def cities_check_city(first_city: str, second_city: str, alternatenames: list):
+def cities_check_city(first_city: str, second_city: str, alternatenames: list):
     '''Second step to check russian alternative names of cities'''
     for altername in alternatenames:
         if first_city == altername:
@@ -196,7 +253,7 @@ async def cities_check_city(first_city: str, second_city: str, alternatenames: l
 
 
 async def cities_translit(word: str, city_num: int) -> dict:
-    '''Own method to translit areas and cities'''
+    '''Own method to translit areas and cities (only russian)'''
     alphabet: dict = {'а': ('a','a','a'),'б': ('b','b','b'),'в': ('v','v','v'),'г': ('g','g','g'),
                 'д': ('d','d','d'),'е': ('e','e','e'),'ё': ('yo','e','e'),'ж': ('zh','zh','zh'),
                 'з': ('z','z','z'),'и': ('i','i','i'),'й': ("i'",'y','i'),'к': ('k','k','k'),
@@ -208,7 +265,13 @@ async def cities_translit(word: str, city_num: int) -> dict:
                 'ю': ('iu','yu','yu'),'я': ('ia','ya','ya'),' ': (' ',' ',' '),'-':('-','-','-'),
                 '#': ('#','#','#'),'№': ('#','#','#'),'«': ('«','«','«'),'»': ('»','»','»'),
                 "'": ("'","'","'"),'"': ('"','"','"'),')': (')',')',')'),'(': ('(','(','('),
-                '?': ('?','?','?')}
+                '?': ('?','?','?'), ',': (',', ',', ','), '.': ('.', '.', '.'),
+                '!': ('!', '!', '!'), '/': ('/', '/', '/'), '\\': ('\\', '\\', '\\'),
+                '[': ('[', '[', '['), ']': (']', ']', ']'), '`': ('`', '`', '`'),
+                '~': ('~', '~', '~'), '$': ('$', '$', '$'), ':': (':', ':', ':'),
+                '=': ('=', '=', '='), '^': ('^', '^', '^'), '{': ('{', '{', '{'),
+                '}': ('}', '}', '}'), ';': (';', ';', ';'), '&': ('&', '&', '&'),
+                '<': ('<', '<', '<'), '>': ('>', '>', '>'), '*': ('*', '*', '*')}
 
     length: int = len(word)
     glasns: list = ['а', 'е', 'ё', 'и', 'о', 'у', 'э']

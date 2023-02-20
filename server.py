@@ -36,8 +36,8 @@ async def get_cities_by_page_and_count(
     '/cities/compare/{first_city}&{second_city}', tags=['3) First and second cities']
 )
 async def compare_two_cities(
-    first_city: str = Path(max_length=50, description='example: Томск'),
-    second_city: str = Path(max_length=50, description='example: Кемерово')
+    first_city: str = Path(max_length=150, description='example: Томск'),
+    second_city: str = Path(max_length=150, description='example: Кемерово')
 ) -> dict:
     '''/cities/compare/{first_city}&{second_city}'''
     compared: bool | dict = await queries.cities_comparing(
@@ -51,7 +51,7 @@ async def compare_two_cities(
 
 @app.get('/cities/find/{hint}', tags=['4) Find cities by a hint'])
 async def find_available_cities(
-    hint: str = Path(max_length=20, description='example: Томск')
+    hint: str = Path(max_length=150, description='example: Томск')
 ) -> dict:
     '''/cities/find/{hint}'''
     find_hints: bool | dict = await queries.cities_help_hints(
